@@ -1,0 +1,13 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
+# AP_Crypto library - files are auto-discovered by the build system
+# This wscript exists only to satisfy the build system's expectation
+# The actual compilation is handled by ap_library() auto-discovery
+
+def configure(cfg):
+    pass
+
+def build(bld):
+    pass
+

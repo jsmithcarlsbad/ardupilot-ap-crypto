@@ -2,6 +2,7 @@
 
 #include <AP_Gripper/AP_Gripper.h>
 
+#include <AP_Crypto/AP_Crypto_config.h>
 #if AP_CRYPTO_ENABLED
 #include <AP_Crypto/AP_Crypto_Params.h>
 #endif

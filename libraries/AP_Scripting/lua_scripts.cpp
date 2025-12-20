@@ -22,6 +22,7 @@
 #include "AP_Scripting.h"
 #include <AP_Logger/AP_Logger.h>
 
+#include <AP_Crypto/AP_Crypto_config.h>
 #if AP_CRYPTO_ENABLED
 #include "lua_encrypted_reader.h"
 #endif

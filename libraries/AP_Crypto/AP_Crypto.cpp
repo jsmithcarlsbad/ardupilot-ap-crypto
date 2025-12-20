@@ -79,8 +79,8 @@ bool AP_Crypto::generate_key(uint8_t key_out[32])
     }
     
     // Use HAL random number generator
-    for (int i = 0; i < 32; i++) {
-        key_out[i] = hal.util->get_random() & 0xFF;
+    if (!hal.util->get_random_vals(key_out, 32)) {
+        return false;
     }
     
     return true;
@@ -327,9 +327,10 @@ bool AP_Crypto::derive_key_from_board_id(uint8_t key[32])
     }
     
     // Simple key derivation from board ID
-    // Get board ID
-    uint32_t board_id[4];
-    if (!hal.util->get_board_id((uint8_t*)board_id, sizeof(board_id))) {
+    // Get board ID (system ID)
+    uint8_t board_id[12];
+    uint8_t board_id_len = sizeof(board_id);
+    if (!hal.util->get_system_id_unformatted(board_id, board_id_len)) {
         // Fallback: use a hardcoded key if board ID not available
         memset(key, 0x42, 32);
         return true;
@@ -339,11 +340,11 @@ bool AP_Crypto::derive_key_from_board_id(uint8_t key[32])
     // Use BLAKE2b if available, otherwise simple hash
     #if defined(HAVE_MONOCYPHER) && defined(AP_CHECK_FIRMWARE_ENABLED)
     uint8_t salt[16] = "ArduPilotCrypto";
-    crypto_blake2b(key, 32, (uint8_t*)board_id, sizeof(board_id), salt, sizeof(salt));
+    crypto_blake2b(key, 32, board_id, board_id_len, salt, sizeof(salt));
     #else
     // Simple hash: XOR board ID bytes and repeat
     for (int i = 0; i < 32; i++) {
-        key[i] = ((uint8_t*)board_id)[i % sizeof(board_id)] ^ (i * 0x37);
+        key[i] = board_id[i % board_id_len] ^ (i * 0x37);
     }
     #endif
     

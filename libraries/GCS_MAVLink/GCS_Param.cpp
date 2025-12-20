@@ -25,6 +25,7 @@
 #include <AP_Logger/AP_Logger.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
+#include <AP_Crypto/AP_Crypto_config.h>
 #if AP_CRYPTO_ENABLED
 #include <AP_Crypto/AP_Crypto_Params.h>
 #endif
@@ -83,6 +84,20 @@ GCS_MAVLINK::queued_param_send()
         char param_name[AP_MAX_NAME_SIZE];
         _queued_parameter->copy_name_token(_queued_parameter_token, param_name, sizeof(param_name), true);
 
+#if AP_CRYPTO_ENABLED
+        // LEIGH_KEY is write-only for security - always return 0 when reading
+        float param_value = _queued_parameter->cast_to_float(_queued_parameter_type);
+        if (strcmp(param_name, "LEIGH_KEY") == 0) {
+            param_value = 0.0f;
+        }
+        mavlink_msg_param_value_send(
+            chan,
+            param_name,
+            param_value,
+            mav_param_type(_queued_parameter_type),
+            _queued_parameter_count,
+            _queued_parameter_index);
+#else
         mavlink_msg_param_value_send(
             chan,
             param_name,
@@ -90,6 +105,7 @@ GCS_MAVLINK::queued_param_send()
             mav_param_type(_queued_parameter_type),
             _queued_parameter_count,
             _queued_parameter_index);
+#endif
 
         _queued_parameter = AP_Param::next_scalar(&_queued_parameter_token, &_queued_parameter_type);
         _queued_parameter_index++;

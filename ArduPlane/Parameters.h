@@ -370,6 +370,9 @@ public:
         k_param_quicktune,
         k_param_mode_autoland,
         k_param__gcs,
+#if AP_CRYPTO_ENABLED
+        k_param_crypto_params,
+#endif
 
     };
 
