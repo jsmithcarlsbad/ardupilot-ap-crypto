@@ -2,6 +2,10 @@
 
 #include <AP_Gripper/AP_Gripper.h>
 
+#if AP_CRYPTO_ENABLED
+#include <AP_Crypto/AP_Crypto_Params.h>
+#endif
+
 /*
  *  ArduPlane parameter definitions
  *
@@ -985,6 +989,12 @@ const AP_Param::Info Plane::var_info[] = {
     // @Group: MAV
     // @Path: ../libraries/GCS_MAVLink/GCS.cpp
     GOBJECT(_gcs,           "MAV",  GCS),
+#endif
+
+#if AP_CRYPTO_ENABLED
+    // @Group: CRYPTO_
+    // @Path: ../libraries/AP_Crypto/AP_Crypto_Params.cpp
+    GOBJECT(crypto_params, "CRYPTO_", AP_Crypto_Params),
 #endif
 
     AP_VAREND

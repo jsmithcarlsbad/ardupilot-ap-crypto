@@ -22,6 +22,10 @@
 #include "AP_Scripting.h"
 #include <AP_Logger/AP_Logger.h>
 
+#if AP_CRYPTO_ENABLED
+#include "lua_encrypted_reader.h"
+#endif
+
 #include <AP_Scripting/lua_generated_bindings.h>
 
 #define DISABLE_INTERRUPTS_FOR_SCRIPT_RUN 0
@@ -167,6 +171,25 @@ void lua_scripts::update_stats(const char *name, uint32_t run_time, int total_me
 }
 
 lua_scripts::script_info *lua_scripts::load_script(lua_State *L, char *filename) {
+#if AP_CRYPTO_ENABLED
+    // Try to read as encrypted file first
+    size_t decrypted_len;
+    uint8_t *decrypted = lua_read_encrypted_file(filename, &decrypted_len);
+    if (decrypted != nullptr) {
+        // Load decrypted content into Lua
+        if (luaL_loadbuffer(L, (const char*)decrypted, decrypted_len, filename) == 0) {
+            hal.util->free_type(decrypted, decrypted_len, AP_HAL::Util::MEM_DMA_SAFE);
+            // Continue with normal script loading flow below...
+        } else {
+            hal.util->free_type(decrypted, decrypted_len, AP_HAL::Util::MEM_DMA_SAFE);
+            // Handle error
+            set_and_print_new_error_message(MAV_SEVERITY_CRITICAL, "Error loading encrypted script: %s", get_error_object_message(L));
+            lua_pop(L, lua_gettop(L));
+            return nullptr;
+        }
+    }
+#endif
+
     if (int error = luaL_loadfile(L, filename)) {
         switch (error) {
             case LUA_ERRSYNTAX:

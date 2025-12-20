@@ -75,6 +75,10 @@
 
 #include <AP_Rally/AP_Rally.h>
 
+#if AP_CRYPTO_ENABLED
+#include <AP_Crypto/AP_Crypto_Params.h>
+#endif
+
 #include <AP_OpticalFlow/AP_OpticalFlow.h>     // Optical Flow library
 #include <AP_Parachute/AP_Parachute.h>
 #include <AP_ADSB/AP_ADSB.h>
@@ -285,6 +289,11 @@ private:
 #if HAL_RALLY_ENABLED
     // Rally Points
     AP_Rally rally;
+#endif
+
+#if AP_CRYPTO_ENABLED
+    // Crypto parameters
+    AP_Crypto_Params crypto_params;
 #endif
 
 #if AC_PRECLAND_ENABLED

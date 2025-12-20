@@ -25,6 +25,10 @@
 #include <AP_Logger/AP_Logger.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
+#if AP_CRYPTO_ENABLED
+#include <AP_Crypto/AP_Crypto_Params.h>
+#endif
+
 extern const AP_HAL::HAL& hal;
 
 // queue of pending parameter requests and replies
@@ -302,6 +306,18 @@ void GCS_MAVLINK::handle_param_set(const mavlink_message_t &msg)
         return;
     }
 
+#if AP_CRYPTO_ENABLED
+    // Special handling for LEIGH_KEY parameter
+    if (strcmp(key, "LEIGH_KEY") == 0) {
+        // Handle key setting via AP_Crypto_Params
+        int32_t key_value = (int32_t)packet.param_value;
+        AP_Crypto_Params::handle_key_set(key_value);
+        // Still send back 0 for security
+        send_parameter_value(key, var_type, 0.0f);
+        return;
+    }
+#endif
+
     // set the value
     vp->set_float(packet.param_value, var_type);
 
@@ -334,6 +350,20 @@ void GCS_MAVLINK::send_parameter_value(const char *param_name, ap_var_type param
     if (!HAVE_PAYLOAD_SPACE(chan, PARAM_VALUE)) {
         return;
     }
+#if AP_CRYPTO_ENABLED
+    // LEIGH_KEY is write-only for security - always return 0 when reading
+    float send_value = param_value;
+    if (param_name != nullptr && strcmp(param_name, "LEIGH_KEY") == 0) {
+        send_value = 0.0f;
+    }
+    mavlink_msg_param_value_send(
+        chan,
+        param_name,
+        send_value,
+        mav_param_type(param_type),
+        AP_Param::count_parameters(),
+        -1);
+#else
     mavlink_msg_param_value_send(
         chan,
         param_name,
@@ -341,6 +371,7 @@ void GCS_MAVLINK::send_parameter_value(const char *param_name, ap_var_type param
         mav_param_type(param_type),
         AP_Param::count_parameters(),
         -1);
+#endif
 }
 
 /*
@@ -411,7 +442,16 @@ void GCS_MAVLINK::param_io_timer(void)
     reply.src_component_id = req.src_component_id;
     reply.param_name[AP_MAX_NAME_SIZE] = 0;
     if (vp != nullptr) {
+#if AP_CRYPTO_ENABLED
+        // LEIGH_KEY is write-only for security - always return 0 when reading
+        if (strcmp(reply.param_name, "LEIGH_KEY") == 0) {
+            reply.value = 0.0f;
+        } else {
+            reply.value = vp->cast_to_float(reply.p_type);
+        }
+#else
         reply.value = vp->cast_to_float(reply.p_type);
+#endif
         reply.param_error = MAV_PARAM_ERROR_NO_ERROR;
     } else {
         reply.value = NaNf;
@@ -499,6 +539,20 @@ uint8_t GCS_MAVLINK::send_parameter_async_replies()
         reserve_param_space_start_ms = saved_reserve_param_space_start_ms;
 
         if (reply.param_error == MAV_PARAM_ERROR_NO_ERROR) {
+#if AP_CRYPTO_ENABLED
+            // LEIGH_KEY is write-only for security - always return 0 when reading
+            float send_value = reply.value;
+            if (strcmp(reply.param_name, "LEIGH_KEY") == 0) {
+                send_value = 0.0f;
+            }
+            mavlink_msg_param_value_send(
+                reply.chan,
+                reply.param_name,
+                send_value,
+                mav_param_type(reply.p_type),
+                reply.count,
+                reply.param_index);
+#else
             mavlink_msg_param_value_send(
                 reply.chan,
                 reply.param_name,
@@ -506,6 +560,7 @@ uint8_t GCS_MAVLINK::send_parameter_async_replies()
                 mav_param_type(reply.p_type),
                 reply.count,
                 reply.param_index);
+#endif
         } else {
             send_param_error(reply, reply.param_error);
         }
