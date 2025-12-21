@@ -3,12 +3,18 @@
 #if AP_CRYPTO_ENABLED
 
 #include <AP_Crypto/AP_Crypto.h>
+#include <AP_Crypto/AP_Crypto_Params.h>
 #include <AP_Filesystem/AP_Filesystem.h>
 
 bool LuaEncryptedLogWriter::init(const char *filename)
 {
     if (filename == nullptr) {
         return false;
+    }
+    
+    // Check if encryption is enabled
+    if (!AP_Crypto_Params::is_encryption_enabled()) {
+        return false;  // Encryption disabled, don't initialize encrypted writer
     }
     
     // Open file

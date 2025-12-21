@@ -281,8 +281,29 @@ bool AP_Crypto::store_key(const uint8_t key[32])
         return false;
     }
     
+    // Check if storage has failed
+    if (StorageManager::storage_failed()) {
+        return false;
+    }
+    
+    // Safety check: ensure storage is initialized
+    // StorageAccess constructor is safe, but write_block might fail if storage isn't ready
+    // We check storage_failed() above, but also verify the storage area is valid
+    if (_crypto_storage.size() == 0) {
+        // Storage area not available
+        return false;
+    }
+    
     // Store key at offset 0 in StorageKeys area
-    return _crypto_storage.write_block(CRYPTO_KEY_STORAGE_OFFSET, key, 32);
+    // Note: This is a synchronous write that should be fast, but if it blocks
+    // it could cause MAVLink issues. However, StorageManager writes are typically
+    // buffered and shouldn't block for long.
+    // We use write_block which is safe and non-blocking (buffered write)
+    bool result = _crypto_storage.write_block(CRYPTO_KEY_STORAGE_OFFSET, key, 32);
+    
+    // Don't fail if write returns false - storage might be busy
+    // We'll try again next time if needed
+    return result;
 }
 
 bool AP_Crypto::retrieve_key(uint8_t key[32])

@@ -10,7 +10,7 @@
 /*
   AP_Crypto_Params - Parameter-based key management for AP_Crypto
   
-  Provides LEIGH_KEY parameter for setting encryption key via MAVLink
+  Provides LEIGH_CRYPT_KEY parameter for setting encryption key via MAVLink
 */
 class AP_Crypto_Params : public AP_Param
 {
@@ -22,8 +22,15 @@ public:
     // Handle key setting from parameter
     static void handle_key_set(int32_t key_value);
     
+    // Check if encryption is enabled (instance method)
+    bool encryption_enabled(void) const { return _crypto_enable != 0; }
+    
+    // Check if encryption is enabled (static method, uses parameter system)
+    static bool is_encryption_enabled(void);
+    
 private:
-    AP_Int32 _key_param;  // LEIGH_KEY parameter (write-only, reads as 0)
+    AP_Int32 _key_param;      // LEIGH_CRYPT_KEY parameter (write-only, reads as 0)
+    AP_Int8 _crypto_enable;   // LEIGH_CRYPT_LVL parameter (0 = disabled, 1 = enabled)
 };
 
 #endif  // AP_CRYPTO_ENABLED

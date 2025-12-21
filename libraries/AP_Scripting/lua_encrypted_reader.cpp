@@ -3,6 +3,7 @@
 #if AP_CRYPTO_ENABLED
 
 #include <AP_Crypto/AP_Crypto.h>
+#include <AP_Crypto/AP_Crypto_Params.h>
 #include <AP_Filesystem/AP_Filesystem.h>
 #include <AP_HAL/AP_HAL.h>
 #include <sys/stat.h>
@@ -13,6 +14,11 @@ uint8_t* lua_read_encrypted_file(const char *filename, size_t *out_len)
 {
     if (filename == nullptr || out_len == nullptr) {
         return nullptr;
+    }
+    
+    // Check if encryption is enabled
+    if (!AP_Crypto_Params::is_encryption_enabled()) {
+        return nullptr;  // Encryption disabled, don't try to decrypt
     }
     
     *out_len = 0;
