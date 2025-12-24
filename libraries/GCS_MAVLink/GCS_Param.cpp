@@ -84,12 +84,13 @@ GCS_MAVLINK::queued_param_send()
         char param_name[AP_MAX_NAME_SIZE];
         _queued_parameter->copy_name_token(_queued_parameter_token, param_name, sizeof(param_name), true);
 
-#if AP_CRYPTO_ENABLED
-        // LEIGH_KEY is write-only for security - always return 0 when reading
         float param_value = _queued_parameter->cast_to_float(_queued_parameter_type);
-        if (strcmp(param_name, "LEIGH_KEY") == 0) {
+#if AP_CRYPTO_ENABLED
+        // LEIGH_CRYPT_KEY is write-only for security - always return 0 when reading
+        if (strcmp(param_name, "LEIGH_CRYPT_KEY") == 0) {
             param_value = 0.0f;
         }
+#endif
         mavlink_msg_param_value_send(
             chan,
             param_name,
@@ -97,15 +98,6 @@ GCS_MAVLINK::queued_param_send()
             mav_param_type(_queued_parameter_type),
             _queued_parameter_count,
             _queued_parameter_index);
-#else
-        mavlink_msg_param_value_send(
-            chan,
-            param_name,
-            _queued_parameter->cast_to_float(_queued_parameter_type),
-            mav_param_type(_queued_parameter_type),
-            _queued_parameter_count,
-            _queued_parameter_index);
-#endif
 
         _queued_parameter = AP_Param::next_scalar(&_queued_parameter_token, &_queued_parameter_type);
         _queued_parameter_index++;
@@ -323,18 +315,26 @@ void GCS_MAVLINK::handle_param_set(const mavlink_message_t &msg)
     }
 
 #if AP_CRYPTO_ENABLED
-    // Special handling for LEIGH_KEY parameter
-    if (strcmp(key, "LEIGH_KEY") == 0) {
+    // Special handling for LEIGH_CRYPT_KEY parameter
+    if (strcmp(key, "LEIGH_CRYPT_KEY") == 0) {
         // Handle key setting via AP_Crypto_Params
         int32_t key_value = (int32_t)packet.param_value;
-        AP_Crypto_Params::handle_key_set(key_value);
+        if (key_value != 0) {
+            // Only process non-zero values (zero means "don't change")
+            AP_Crypto_Params::handle_key_set(key_value);
+        }
+        // Set parameter value to 0 (actual key is stored separately, reads will return 0)
+        // We need to save this to keep parameter system consistent
+        vp->set_float(0.0f, var_type);
+        vp->save(!is_equal(0.0f, old_value));  // Save if value changed
+        
         // Still send back 0 for security
         send_parameter_value(key, var_type, 0.0f);
         return;
     }
 #endif
 
-    // set the value
+    // set the value for normal parameters
     vp->set_float(packet.param_value, var_type);
 
     /*
@@ -367,9 +367,9 @@ void GCS_MAVLINK::send_parameter_value(const char *param_name, ap_var_type param
         return;
     }
 #if AP_CRYPTO_ENABLED
-    // LEIGH_KEY is write-only for security - always return 0 when reading
+    // LEIGH_CRYPT_KEY is write-only for security - always return 0 when reading
     float send_value = param_value;
-    if (param_name != nullptr && strcmp(param_name, "LEIGH_KEY") == 0) {
+    if (param_name != nullptr && strcmp(param_name, "LEIGH_CRYPT_KEY") == 0) {
         send_value = 0.0f;
     }
     mavlink_msg_param_value_send(
@@ -459,8 +459,8 @@ void GCS_MAVLINK::param_io_timer(void)
     reply.param_name[AP_MAX_NAME_SIZE] = 0;
     if (vp != nullptr) {
 #if AP_CRYPTO_ENABLED
-        // LEIGH_KEY is write-only for security - always return 0 when reading
-        if (strcmp(reply.param_name, "LEIGH_KEY") == 0) {
+        // LEIGH_CRYPT_KEY is write-only for security - always return 0 when reading
+        if (strcmp(reply.param_name, "LEIGH_CRYPT_KEY") == 0) {
             reply.value = 0.0f;
         } else {
             reply.value = vp->cast_to_float(reply.p_type);
@@ -556,9 +556,9 @@ uint8_t GCS_MAVLINK::send_parameter_async_replies()
 
         if (reply.param_error == MAV_PARAM_ERROR_NO_ERROR) {
 #if AP_CRYPTO_ENABLED
-            // LEIGH_KEY is write-only for security - always return 0 when reading
+            // LEIGH_CRYPT_KEY is write-only for security - always return 0 when reading
             float send_value = reply.value;
-            if (strcmp(reply.param_name, "LEIGH_KEY") == 0) {
+            if (strcmp(reply.param_name, "LEIGH_CRYPT_KEY") == 0) {
                 send_value = 0.0f;
             }
             mavlink_msg_param_value_send(
