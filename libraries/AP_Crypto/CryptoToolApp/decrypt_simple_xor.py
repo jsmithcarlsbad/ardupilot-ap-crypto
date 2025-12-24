@@ -16,10 +16,24 @@ import hashlib
 import argparse
 
 def derive_key_from_leigh_key(leigh_key_value):
-    """Derive key from LEIGH_KEY INT32 using SHA256."""
-    salt = b'LEIGH_KEY_SALT_1'  # 16 bytes
-    seed_bytes = struct.pack('<i', leigh_key_value)  # INT32 little-endian
-    return hashlib.sha256(seed_bytes + salt).digest()
+    """Derive key from LEIGH_KEY INT32 using simple repetition method.
+    
+    This matches the C++ implementation in AP_Crypto_Params.cpp:
+    - Convert INT32 to uint32_t
+    - Repeat the 4 bytes of the INT32, XORing with (i * 0x73) for each position
+    """
+    # Convert to uint32_t (handles negative values correctly)
+    uval = leigh_key_value & 0xFFFFFFFF
+    
+    # Pack as little-endian uint32 (4 bytes)
+    uval_bytes = struct.pack('<I', uval)
+    
+    # Derive 32-byte key: repeat the 4 bytes, XOR with (i * 0x73)
+    key = bytearray(32)
+    for i in range(32):
+        key[i] = uval_bytes[i % 4] ^ (i * 0x73)
+    
+    return bytes(key)
 
 def generate_keystream_block(key, counter):
     """Generate 32-byte keystream block for given counter."""
@@ -83,7 +97,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Algorithm:
-  Key: SHA256(LEIGH_KEY_INT32_bytes + "LEIGH_KEY_SALT_1")
+  Key: Repeat LEIGH_KEY_INT32 bytes, XOR with (i * 0x73) for each position
   Keystream: SHA256(key + counter) for each 32-byte block
   Decryption: XOR ciphertext with keystream
   

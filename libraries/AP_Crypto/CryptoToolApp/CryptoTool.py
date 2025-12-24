@@ -51,10 +51,11 @@ def base64url_decode(data):
 
 
 def derive_key_from_leigh_key_simple(leigh_key_value):
-    """Derive key from LEIGH_KEY INT32 using SHA256 (simplified method).
+    """Derive key from LEIGH_KEY INT32 using simple repetition method.
     
-    Based on COMPLETE_ENCRYPTION_SOLUTION.md:
-    Key = SHA256(LEIGH_KEY_INT32_bytes + "LEIGH_KEY_SALT_1")
+    This matches the C++ implementation in AP_Crypto_Params.cpp:
+    - Convert INT32 to uint32_t
+    - Repeat the 4 bytes of the INT32, XORing with (i * 0x73) for each position
     
     Args:
         leigh_key_value: LEIGH_KEY parameter value (INT32)
@@ -63,10 +64,18 @@ def derive_key_from_leigh_key_simple(leigh_key_value):
         32-byte key
     """
     import struct
-    import hashlib
-    salt = b'LEIGH_KEY_SALT_1'  # 16 bytes
-    seed_bytes = struct.pack('<i', leigh_key_value)  # INT32 little-endian
-    return hashlib.sha256(seed_bytes + salt).digest()
+    # Convert to uint32_t (handles negative values correctly)
+    uval = leigh_key_value & 0xFFFFFFFF
+    
+    # Pack as little-endian uint32 (4 bytes)
+    uval_bytes = struct.pack('<I', uval)
+    
+    # Derive 32-byte key: repeat the 4 bytes, XOR with (i * 0x73)
+    key = bytearray(32)
+    for i in range(32):
+        key[i] = uval_bytes[i % 4] ^ (i * 0x73)
+    
+    return bytes(key)
 
 def decrypt_simple_xor_format(key_bytes, file_data):
     """Decrypt using simplified XOR format (no header, no MAC, no nonce).
@@ -166,10 +175,10 @@ def derive_key_from_password(password, salt=None):
     # Remove whitespace from input
     password_clean = password.strip()
     
-    # First, check if it's a pure number (all digits) - treat as LEIGH_KEY for SHA256
+    # First, check if it's a pure number (all digits) - treat as LEIGH_KEY
     # This takes priority over hex key detection
-    if password_clean.isdigit():
-        # It's a pure number - use simplified SHA256 key derivation (COMPLETE_ENCRYPTION_SOLUTION.md)
+    if password_clean.isdigit() or (password_clean.startswith('-') and password_clean[1:].isdigit()):
+        # It's a pure number - use simple key derivation (matches AP_Crypto_Params.cpp)
         try:
             leigh_key_value = int(password_clean)
             key_bytes = derive_key_from_leigh_key_simple(leigh_key_value)
@@ -225,16 +234,13 @@ def derive_key_from_password(password, salt=None):
                 # Other exceptions - not valid hex, fall through to treat as password
                 pass
     
-    # Not a hex key - check if it's a numeric seed for SHA256 derivation (simplified method)
+    # Not a hex key - check if it's a numeric seed for key derivation
     # Try to parse as INT32 (for LEIGH_KEY from MAVLink)
     try:
         seed_int = int(password_clean)
-        # It's a number - use SHA256 derivation (COMPLETE_ENCRYPTION_SOLUTION.md)
-        # Key = SHA256(LEIGH_KEY_INT32_bytes + "LEIGH_KEY_SALT_1")
-        import hashlib
-        salt = b'LEIGH_KEY_SALT_1'  # 16 bytes
-        seed_bytes_le = struct.pack('<i', seed_int)  # INT32 little-endian
-        key_bytes = hashlib.sha256(seed_bytes_le + salt).digest()
+        # It's a number - use simple key derivation (matches AP_Crypto_Params.cpp)
+        # Key = repeat INT32 bytes, XOR with (i * 0x73)
+        key_bytes = derive_key_from_leigh_key_simple(seed_int)
         return base64url_encode(key_bytes)
     except ValueError:
         # Not a number - check if user accidentally entered the salt or password string
@@ -242,7 +248,7 @@ def derive_key_from_password(password, salt=None):
             raise ValueError(
                 "You entered the salt value 'LEIGH_KEY_SALT_1' instead of the LEIGH_KEY seed value.\n"
                 "Please enter the INT32 LEIGH_KEY value (a number) that was set via MAVLink.\n"
-                "The key will be derived using SHA256(LEIGH_KEY_INT32_bytes + salt)."
+                "The key will be derived using simple repetition: repeat INT32 bytes, XOR with (i * 0x73)."
             )
         # Check if user entered a password string when they should enter a numeric seed
         if "LEIGH" in password_clean.upper() and "AEROSPACE" in password_clean.upper():
@@ -250,7 +256,7 @@ def derive_key_from_password(password, salt=None):
                 "You entered a password string, but .tlog files require the INT32 LEIGH_KEY seed value.\n"
                 "Please enter the numeric LEIGH_KEY value (a number) that was set via MAVLink.\n"
                 "Example: If LEIGH_KEY was set to 12345, enter '12345' (not the password string).\n"
-                "The key will be derived using SHA256(LEIGH_KEY_INT32_bytes + salt)."
+                "The key will be derived using simple repetition: repeat INT32 bytes, XOR with (i * 0x73)."
             )
         # Not a number - treat as password string
         pass

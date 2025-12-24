@@ -127,7 +127,7 @@ const AP_Param::GroupInfo AP_BoardConfig::var_info[] = {
     // @CopyFieldsFrom: BRD_SER1_RTSCTS
     // @DisplayName: Serial 2 flow control
     // @Description: Enable flow control on serial 2 (telemetry 2). You must have the RTS and CTS pins connected to your radio. The standard DF13 6 pin connector for a 3DR radio does have those pins connected. If this is set to 2 then flow control will be auto-detected by checking for the output buffer filling on startup.
-    AP_GROUPINFO("SER2_RTSCTS",    2, AP_BoardConfig, state.ser_rtscts[2], 2),
+    AP_GROUPINFO("SER2_RTSCTS",    2, AP_BoardConfig, state.ser_rtscts[2], 0),
 #endif
 
 #ifdef HAL_HAVE_RTSCTS_SERIAL3
